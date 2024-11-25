@@ -5,7 +5,7 @@ using UnityEngine.AI;
 
 public class Enemy : MonoBehaviour
 {
-    public Transform target;
+    public GameObject target;
     public float speed = 5f;
     public float attackRange = 2f;
     public int health = 100;
@@ -13,6 +13,7 @@ public class Enemy : MonoBehaviour
     private Animator animator;
     private NavMeshAgent agent;
     private bool isDead = false;
+    private float nextAttackTime = 0f;
 
     void Awake()
     {
@@ -24,11 +25,16 @@ public class Enemy : MonoBehaviour
     {
         if (isDead) return;
 
-        float distance = Vector3.Distance(transform.position, target.position);
+        float distance = Vector3.Distance(transform.position, target.transform.position);
 
         if (distance <= attackRange)
         {
             Attack();
+            if (Time.time >= nextAttackTime)
+            {
+                target.GetComponent<PlayerController>().TakeDamage(10, transform.position);
+                nextAttackTime = Time.time + 1f;
+            }
         }
         else if (distance > attackRange + 0.5f)
         {
@@ -38,7 +44,7 @@ public class Enemy : MonoBehaviour
 
     void Chase()
     {
-        bool found = agent.SetDestination(target.position);
+        bool found = agent.SetDestination(target.transform.position);
         agent.speed = speed;
         if (!found)
         {
@@ -57,10 +63,7 @@ public class Enemy : MonoBehaviour
     public void TakeDamage(int damage)
     {
         if (isDead) return;
-
         health -= damage;
-        animator.SetTrigger("hit");
-
         if (health <= 0)
         {
             Die();
@@ -71,8 +74,7 @@ public class Enemy : MonoBehaviour
     {
         isDead = true;
         agent.SetDestination(transform.position);
-        animator.SetTrigger("isDead");
-        // Optionally, disable the enemy after some time
+        animator.SetTrigger("die");
         Destroy(gameObject, 5f);
     }
 }

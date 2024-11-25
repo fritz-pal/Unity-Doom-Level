@@ -18,9 +18,13 @@ public class PlayerController : MonoBehaviour
     public float grappleForce = 1f;
     public float gravity = 9.81f;
     public float maxGrappleDistance = 100f;
+    public int health = 100;
+    public GameObject gameOverScreen;
+    public Slider healthBar;
     public Button cooldownIndicatorDash;
     public Button cooldownIndicatorGrapple;
     public LineRenderer grappleLine;
+    public LineRenderer shotLine;
     public GameObject gunPoint;
     private bool isSprinting = false;
     private CharacterController characterController;
@@ -29,34 +33,36 @@ public class PlayerController : MonoBehaviour
     private Vector2 lookDirection;
     private Vector3 moveVelocity;
     private Vector3 acc = Vector3.zero;
+    public AudioClip gunShot;
     private bool jump;
     private float dashUsed = 0;
     private float grappleUsed = 0;
+    private float gunUsed = 0;
     private bool grappling = false;
     private bool grapplePulling = false;
     private Vector3 grapplePoint;
     private bool climbing = false;	
 
 
-    // Start is called before the first frame update
     void Start()
     {
         characterController = gameObject.GetComponent<CharacterController>();
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
         grappleLine.enabled = false;
+        shotLine.enabled = false;
+        healthBar.maxValue = health;
+        healthBar.value = health;
+        gameOverScreen.SetActive(false);
     }
 
-    // Update is called once per frame
     void Update()
     {
-
         lookDirection.x += lookInput.x * sensitivity;
         lookDirection.y -= lookInput.y * sensitivity;
         lookDirection.y = Mathf.Clamp(lookDirection.y, -90f, 90f);
         playerCamera.transform.localRotation = Quaternion.Euler(lookDirection.y, 0, 0);
         transform.rotation = Quaternion.Euler(0, lookDirection.x, 0);
-
 
         Vector3 forward = transform.TransformDirection(Vector3.forward);
         Vector3 right = transform.TransformDirection(Vector3.right);
@@ -64,8 +70,9 @@ public class PlayerController : MonoBehaviour
 
         if (characterController.isGrounded || climbing)
         {
-            acc += (forward * moveInput.y + right * moveInput.x) * (isSprinting ? runSpeed : walkSpeed);
-            moveVelocity.y = 0;
+            
+            acc += (forward * moveInput.y + right * moveInput.x) * ((isSprinting ? runSpeed : walkSpeed) * Time.deltaTime);
+            if (moveVelocity.y < 0) moveVelocity.y = 0;
             if (jump)
             {
                 if (!climbing)
@@ -74,14 +81,17 @@ public class PlayerController : MonoBehaviour
                 }
                 else
                 {
-                    acc += up * jumpForce * 0.5f;
+                    acc += up * walkSpeed / 2 * Time.deltaTime ;
                 }
             }
         }
         else
         {
-            acc.y -= gravity;
-            acc += (forward * moveInput.y + right * moveInput.x) * (isSprinting ? runSpeed : walkSpeed) * 0.2f;
+            acc += (forward * moveInput.y + right * moveInput.x) * ((isSprinting ? runSpeed : walkSpeed) * 0.2f * Time.deltaTime);
+        }
+        if (!climbing)
+        {
+            acc.y -= gravity*Time.deltaTime;
         }
         moveVelocity += acc;
         characterController.Move(moveVelocity * Time.deltaTime);
@@ -115,11 +125,11 @@ public class PlayerController : MonoBehaviour
                 grapplePulling = false;
                 grappling = false;
                 grappleLine.enabled = false;
-                moveVelocity = Mathf.Min(moveVelocity.magnitude, jumpForce * 2) * moveVelocity.normalized;
+                moveVelocity = Mathf.Min(moveVelocity.magnitude, jumpForce * 1.5f) * moveVelocity.normalized;
             }
         }
 
-        if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, 1.1f))
+        if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, 1.2f))
         {
             if (hit.collider.gameObject.CompareTag("Trampoline"))
             {
@@ -192,14 +202,14 @@ public class PlayerController : MonoBehaviour
             }
             grappling = true;
             RaycastHit hit;
-            if (Physics.Raycast(playerCamera.transform.position, playerCamera.transform.forward, out hit, maxGrappleDistance))
+            if (Physics.Raycast(playerCamera.transform.position, playerCamera.transform.TransformDirection(Vector3.forward), out hit, maxGrappleDistance))
             {
                 grapplePoint = hit.point;
                 Invoke(nameof(ExecuteGrapple), 0.5f);
             }
             else
             {
-                grapplePoint = playerCamera.transform.position + playerCamera.transform.forward * maxGrappleDistance;
+                grapplePoint = playerCamera.transform.position + playerCamera.transform.TransformDirection(Vector3.forward) * maxGrappleDistance;
                 Invoke(nameof(StopGrapple), 0.5f);
             }
             grappleLine.SetPosition(0, grapplePoint);
@@ -247,6 +257,51 @@ public class PlayerController : MonoBehaviour
         {
             climbing = true;
         }
+    }
+
+    public void HandleFireInput(InputAction.CallbackContext context)
+    {
+        if (context.performed && !grappling && !grapplePulling)
+        {
+            if (Time.time - gunUsed < 0.5)
+            {
+                return;
+            }
+            gunUsed = Time.time;
+            AudioSource.PlayClipAtPoint(gunShot, playerCamera.transform.position);
+            shotLine.SetPosition(0, gunPoint.transform.position);
+            shotLine.SetPosition(1, playerCamera.transform.position + playerCamera.transform.TransformDirection(Vector3.forward) * 100);
+            shotLine.enabled = true;
+            Invoke(nameof(StopShot), 0.1f);
+            RaycastHit hit;
+            if (Physics.Raycast(playerCamera.transform.position, playerCamera.transform.TransformDirection(Vector3.forward), out hit, 100))
+            {
+                if (hit.collider.gameObject.CompareTag("Enemy"))
+                {
+                    hit.collider.gameObject.GetComponent<Enemy>().TakeDamage(100);
+                }
+            }
+        }
+    }
+
+    private void StopShot()
+    {
+        shotLine.enabled = false;
+    }
+
+    public void TakeDamage(int damage, Vector3 attacker)
+    {
+        health -= damage;
+        healthBar.value = health;
+        ApplyForce((transform.position - attacker).normalized * 10);
+        if (health <= 0)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+            gameOverScreen.SetActive(true);
+            Time.timeScale = 0;
+            
+        }   
     }
 
     public void OnCollisionExit(Collision collision)

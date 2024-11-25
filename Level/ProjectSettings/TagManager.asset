@@ -6,6 +6,7 @@ TagManager:
   tags:
   - Trampoline
   - Climbable
+  - Enemy
   layers:
   - Default
   - TransparentFX

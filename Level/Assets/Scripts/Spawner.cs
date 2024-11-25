@@ -5,13 +5,19 @@ using UnityEngine;
 public class Spawner : MonoBehaviour
 {
     public GameObject enemyPrefab;    
-    public float spawnRate = 10f;
+    public float spawnRate = 20f;
     public GameObject player;
 
-    void Update()
+    void Start()
     {
-        if (Time.time % spawnRate == 0)
+        StartCoroutine(SpawnEnemyRoutine());
+    }
+
+    public IEnumerator SpawnEnemyRoutine()
+    {
+        while (true)
         {
+            yield return new WaitForSeconds(spawnRate);
             SpawnEnemy();
         }
     }
@@ -19,6 +25,6 @@ public class Spawner : MonoBehaviour
     public void SpawnEnemy()
     {
         GameObject enemy = Instantiate(enemyPrefab, transform.position, Quaternion.identity);
-        enemy.GetComponent<Enemy>().target = player.transform;
+        enemy.GetComponent<Enemy>().target = player;
     }
 }
