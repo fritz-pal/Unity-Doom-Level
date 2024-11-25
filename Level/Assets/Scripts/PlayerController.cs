@@ -35,6 +35,7 @@ public class PlayerController : MonoBehaviour
     private bool grappling = false;
     private bool grapplePulling = false;
     private Vector3 grapplePoint;
+    private bool climbing = false;	
 
 
     // Start is called before the first frame update
@@ -59,14 +60,22 @@ public class PlayerController : MonoBehaviour
 
         Vector3 forward = transform.TransformDirection(Vector3.forward);
         Vector3 right = transform.TransformDirection(Vector3.right);
+        Vector3 up = transform.TransformDirection(Vector3.up);
 
-        if (characterController.isGrounded)
+        if (characterController.isGrounded || climbing)
         {
             acc += (forward * moveInput.y + right * moveInput.x) * (isSprinting ? runSpeed : walkSpeed);
             moveVelocity.y = 0;
             if (jump)
             {
-                acc.y += jumpForce;
+                if (!climbing)
+                {
+                    acc += up * jumpForce;
+                }
+                else
+                {
+                    acc += up * jumpForce * 0.5f;
+                }
             }
         }
         else
@@ -77,10 +86,14 @@ public class PlayerController : MonoBehaviour
         moveVelocity += acc;
         characterController.Move(moveVelocity * Time.deltaTime);
 
-        if (characterController.isGrounded)
+        if (characterController.isGrounded || climbing)
         {
             moveVelocity.x *= 0.9f;
             moveVelocity.z *= 0.9f;
+            if (climbing)
+            {
+                moveVelocity.y *= 0.9f;
+            }
         }
         else
         {
@@ -97,7 +110,7 @@ public class PlayerController : MonoBehaviour
         {
             Vector3 direction = (grapplePoint - gunPoint.transform.position).normalized * grappleForce;
             ApplyForce(direction);
-            if (Time.time - grappleUsed > 5 || Vector3.Distance(gameObject.transform.position, grapplePoint) < 1)
+            if (Time.time - grappleUsed > 5 || Vector3.Distance(gameObject.transform.position, grapplePoint) < 1.5)
             {
                 grapplePulling = false;
                 grappling = false;
@@ -226,5 +239,21 @@ public class PlayerController : MonoBehaviour
     public void HandleJumpInput(InputAction.CallbackContext context)
     {
         jump = context.performed;
+    }
+
+    public void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Climbable"))
+        {
+            climbing = true;
+        }
+    }
+
+    public void OnCollisionExit(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Climbable"))
+        {
+            climbing = false;
+        }
     }
 }
